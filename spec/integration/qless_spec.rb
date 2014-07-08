@@ -19,6 +19,14 @@ module Qless
       end
     end
 
+    it 'can spawn a new connection when given a redis connection' do
+      redis  = new_redis_for_alternate_db
+      client = ::Qless::Client.new(redis: redis)
+      redis2 = client.new_redis_connection
+      expect(redis2).not_to equal(client.redis)
+      expect(redis2.id).to eq(client.redis.id)
+    end
+
     describe '#workers' do
       it 'provides access to worker stats' do
         # Put the job, there should be no workers
@@ -67,6 +75,11 @@ module Qless
         queue.put('Foo', {}, tags: %w{foo bar whiz})
       end
       expect(client.tags.to_set).to eq(%w{foo bar whiz}.to_set)
+    end
+
+    it 'shows empty tagged jobs as an array' do
+      # If there are no jobs with a given tag, it should be an array, not a hash
+      expect(client.jobs.tagged('foo')['jobs']).to eq([])
     end
 
     it 'exposes bulk cancel' do

@@ -145,7 +145,7 @@ module Qless
      [:fail, 'group', 'message'],
      [:complete],
      [:cancel],
-     [:move, 'queue'],
+     [:requeue, 'queue'],
      [:retry],
      [:retry, 55]
     ].each do |meth, *args|
@@ -194,12 +194,14 @@ module Qless
     end
 
     describe '#to_hash' do
-      let(:job) { Job.build(client, JobClass) }
+      it 'returns out the state of the job' do
+        job = Job.build(client, JobClass, 'spawned_from_jid' => 'foo')
 
-      it 'prints out the state of the job' do
-        hash = job.to_hash
-        hash[:klass_name].should eq('Qless::JobClass')
-        hash[:state].should eq('running')
+        expect(job.to_hash).to include(
+          klass_name: "Qless::JobClass",
+          state: "running",
+          spawned_from_jid: "foo"
+        )
       end
     end
 
@@ -274,6 +276,53 @@ module Qless
       it 'tolerates queues that lack a `put` time' do
         job = build_job({}, queue_1)
         expect(job.initially_put_at).to eq(time_1)
+      end
+    end
+
+    describe "equality" do
+      it 'is considered equal when the qless client and jid are equal' do
+        job1 = Qless::Job.build(client, JobClass, jid: "foo")
+        job2 = Qless::Job.build(client, JobClass, jid: "foo")
+
+        expect(job1 == job2).to eq(true)
+        expect(job2 == job1).to eq(true)
+        expect(job1.eql? job2).to eq(true)
+        expect(job2.eql? job1).to eq(true)
+
+        expect(job1.hash).to eq(job2.hash)
+      end
+
+      it 'is not considered equal when the jid differs' do
+        job1 = Qless::Job.build(client, JobClass, jid: "foo")
+        job2 = Qless::Job.build(client, JobClass, jid: "food")
+
+        expect(job1 == job2).to eq(false)
+        expect(job2 == job1).to eq(false)
+        expect(job1.eql? job2).to eq(false)
+        expect(job2.eql? job1).to eq(false)
+
+        expect(job1.hash).not_to eq(job2.hash)
+      end
+
+      it 'is not considered equal when the client differs' do
+        job1 = Qless::Job.build(client, JobClass, jid: "foo")
+        job2 = Qless::Job.build(double, JobClass, jid: "foo")
+
+        expect(job1 == job2).to eq(false)
+        expect(job2 == job1).to eq(false)
+        expect(job1.eql? job2).to eq(false)
+        expect(job2.eql? job1).to eq(false)
+
+        expect(job1.hash).not_to eq(job2.hash)
+      end
+
+      it 'is not considered equal to other types of objects' do
+        job1 = Qless::Job.build(client, JobClass, jid: "foo")
+        job2 = Class.new(Qless::Job).build(client, JobClass, jid: "foo")
+
+        expect(job1 == job2).to eq(false)
+        expect(job1.eql? job2).to eq(false)
+        expect(job1.hash).not_to eq(job2.hash)
       end
     end
   end

@@ -77,12 +77,13 @@ module Qless
 
       def tabs
         [
-          { name: 'Queues'  , path: '/queues'  },
-          { name: 'Workers' , path: '/workers' },
-          { name: 'Track'   , path: '/track'   },
-          { name: 'Failed'  , path: '/failed'  },
-          { name: 'Config'  , path: '/config'  },
-          { name: 'About'   , path: '/about'   }
+          { name: 'Queues'   , path: '/queues'   },
+          { name: 'Workers'  , path: '/workers'  },
+          { name: 'Track'    , path: '/track'    },
+          { name: 'Failed'   , path: '/failed'   },
+          { name: 'Completed', path: '/completed'},
+          { name: 'Config'   , path: '/config'   },
+          { name: 'About'    , path: '/about'    }
         ]
       end
 
@@ -214,6 +215,14 @@ module Qless
         title: 'Failed | ' + params[:type],
         type: params[:type],
         failed: paginated(client.jobs, :failed, params[:type])
+      }
+    end
+
+    get '/completed/?' do
+      completed = paginated(client.jobs, :complete)      
+      erb :completed, layout: true, locals: {
+        title: 'Completed',
+        jobs: completed.map { |jid| client.jobs[jid] }
       }
     end
 
@@ -389,7 +398,7 @@ module Qless
         if job.nil?
           halt 404, 'Could not find job'
         else
-          job.move(data['queue'])
+          job.requeue(data['queue'])
           return json({ id: data['id'], queue: data['queue'] })
         end
       end
@@ -421,7 +430,7 @@ module Qless
         if job.nil?
           halt 404, 'Could not find job'
         else
-          job.move(job.queue_name)
+          job.requeue(job.queue_name)
           return json({ id: data['id'], queue: job.queue_name })
         end
       end
@@ -436,7 +445,7 @@ module Qless
       else
         jobs = client.jobs.failed(data['type'], 0, 500)['jobs']
         results = jobs.map do |job|
-          job.move(job.queue_name)
+          job.requeue(job.queue_name)
           { id: job.jid, queue: job.queue_name }
         end
         return json(results)

@@ -45,7 +45,7 @@ module Qless
     @failure_formatter ||= FailureFormatter.new
   end
 
-  module_function(:generate_jid, :stringify_hash_keys, :failure_formatter)
+  module_function :generate_jid, :stringify_hash_keys, :failure_formatter
 
   # A class for interacting with jobs. Not meant to be instantiated directly,
   # it's accessed through Client#jobs
@@ -65,7 +65,10 @@ module Qless
     end
 
     def tagged(tag, offset = 0, count = 25)
-      JSON.parse(@client.call('tag', 'get', tag, offset, count))
+      results = JSON.parse(@client.call('tag', 'get', tag, offset, count))
+      # Should be an empty array instead of an empty hash
+      results['jobs'] = [] if results['jobs'] == {}
+      results
     end
 
     def failed(t = nil, start = 0, limit = 25)
@@ -219,8 +222,23 @@ module Qless
       call('cancel', jids)
     end
 
-    def new_redis_connection
-      ::Redis.new(url: redis.id)
+    if ::Redis.instance_method(:dup).owner == ::Redis
+      def new_redis_connection
+        redis.dup
+      end
+    else # redis version < 3.0.7
+      def new_redis_connection
+        ::Redis.new(@options)
+      end
+    end
+
+    def ==(other)
+      self.class == other.class && redis.id == other.redis.id
+    end
+    alias eql? ==
+
+    def hash
+      self.class.hash ^ redis.id.hash
     end
 
   private
